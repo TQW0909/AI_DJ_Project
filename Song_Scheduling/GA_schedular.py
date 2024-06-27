@@ -1,4 +1,4 @@
-import numpy as np
+import random
 
 # Convert the harmnonic keys to a numerical value
 def convert_key_to_numerical(key):
@@ -37,55 +37,58 @@ def calculate_transition_cost(song1, song2):
     return total_cost
 
 
-def optimal_mix_order(songs):
-    n = len(songs)
-    dp = [[float('inf')] * n for _ in range(1 << n)]
-    path = [[-1] * n for _ in range(1 << n)]
+def calculate_fitness(order, songs):
+    total_cost = 0
+    for i in range(len(order) - 1):
+        total_cost += calculate_transition_cost(songs[order[i]], songs[order[i + 1]])
+    return total_cost
 
-    # Base case: starting with each song
-    for i in range(n):
-        dp[1 << i][i] = 0
 
-    # Fill the DP table
-    for mask in range(1 << n):
-        for i in range(n):
-            if mask & (1 << i):
-                for j in range(n):
-                    if mask & (1 << j) == 0:
-                        next_mask = mask | (1 << j)
-                        cost = dp[mask][i] + calculate_transition_cost(songs[i], songs[j])
-                        if cost < dp[next_mask][j]:
-                            dp[next_mask][j] = cost
-                            path[next_mask][j] = i
+def create_initial_population(songs, population_size):
+    population = []
+    for _ in range(population_size):
+        order = list(range(len(songs)))
+        random.shuffle(order)
+        population.append(order)
+    return population
 
-    # Find the minimum cost and corresponding ending song
-    min_cost = float('inf')
-    end_song = -1
-    final_mask = (1 << n) - 1
-    for i in range(n):
-        if dp[final_mask][i] < min_cost:
-            min_cost = dp[final_mask][i]
-            end_song = i
+def crossover(parent1, parent2):
+    size = len(parent1)
+    start, end = sorted(random.sample(range(size), 2))
+    child = [None] * size
+    child[start:end] = parent1[start:end]
+    pointer = 0
+    for elem in parent2:
+        if elem not in child:
+            while child[pointer] is not None:
+                pointer += 1
+            child[pointer] = elem
+    return child
 
-    # Trace back the optimal path
-    optimal_order = []
-    current_song = end_song
-    current_mask = final_mask
-    while current_song != -1:
-        optimal_order.append(current_song)
-        next_song = path[current_mask][current_song]
-        current_mask &= ~(1 << current_song)
-        current_song = next_song
+def mutate(order, mutation_rate):
+    for i in range(len(order)):
+        if random.random() < mutation_rate:
+            j = random.randint(0, len(order) - 1)
+            order[i], order[j] = order[j], order[i]
+    return order
 
-    optimal_order.reverse()
-
-    # Output the optimal order of songs
-    print("Optimal order of songs:")
-    for idx in optimal_order:
-        song = songs[idx]
-        print(f"Title: {song['title']}, Artist: {song['artist']}, BPM: {song['bpm']}, Key: {song['key']}")
-
-    print(f"Minimum transition cost: {min_cost}")
+def genetic_algorithm(songs, population_size=100, generations=1000, mutation_rate=0.01):
+    population = create_initial_population(songs, population_size)
+    
+    for generation in range(generations):
+        population = sorted(population, key=lambda x: calculate_fitness(x, songs))
+        next_generation = population[:population_size//2]
+        
+        while len(next_generation) < population_size:
+            parent1, parent2 = random.sample(population[:population_size//2], 2)
+            child = crossover(parent1, parent2)
+            child = mutate(child, mutation_rate)
+            next_generation.append(child)
+        
+        population = next_generation
+    
+    best_order = min(population, key=lambda x: calculate_fitness(x, songs))
+    return best_order
 
 # Example song data with keys and BPM
 songs = [
@@ -106,4 +109,10 @@ for song in songs:
     print(f"Title: {song['title']}, Artist: {song['artist']}, BPM: {song['bpm']}, Key: {song['key']}")
 
 
-optimal_mix_order(songs)
+best_order = genetic_algorithm(songs, population_size=100, generations=1000, mutation_rate=0.01)
+
+print("Optimal order of songs:")
+for idx in best_order:
+    song = songs[idx]
+    print(f"Title: {song['title']}, Artist: {song['artist']}, BPM: {song['bpm']}, Key: {song['key']}")
+
