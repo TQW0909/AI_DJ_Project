@@ -1,6 +1,6 @@
 import numpy as np
 
-# Convert the harmnonic keys to a numerical value
+# Convert the harmonic keys to a numerical value
 def convert_key_to_numerical(key):
     number = int(key[:-1])
     letter = 0 if key[-1] == 'A' else 1
@@ -25,20 +25,18 @@ def calculate_harmonic_cost(key1, key2):
     elif let1 == 1 and let2 == 0 and num2 == num1 + 1:
         return 0  # Major to Minor Sub Dominant
     
-    return 20  # Any other transitions are heavily penalized 
+    return 10  # Any other transitions are heavily penalized 
 
-
-def calculate_transition_cost(song1, song2):
-    bpm_diff = abs(song1['bpm'] - song2['bpm'])
-    bpm_cost = 0 if bpm_diff <= 5 else 1.5 * bpm_diff
-    harmonic_cost = calculate_harmonic_cost(song1['key'], song2['key'])
+def calculate_transition_cost(bpm1, bpm2, key1, key2):
+    bpm_diff = abs(bpm1 - bpm2)
+    bpm_cost = 0 if bpm_diff <= 5 else 15 * bpm_diff
+    harmonic_cost = calculate_harmonic_cost(key1, key2)
     total_cost = harmonic_cost + bpm_cost
     
     return total_cost
 
-
-def optimal_mix_order(songs):
-    n = len(songs)
+def optimal_mix_order(bpm_list, key_list):
+    n = len(bpm_list)
     dp = [[float('inf')] * n for _ in range(1 << n)]
     path = [[-1] * n for _ in range(1 << n)]
 
@@ -53,7 +51,7 @@ def optimal_mix_order(songs):
                 for j in range(n):
                     if mask & (1 << j) == 0:
                         next_mask = mask | (1 << j)
-                        cost = dp[mask][i] + calculate_transition_cost(songs[i], songs[j])
+                        cost = dp[mask][i] + calculate_transition_cost(bpm_list[i], bpm_list[j], key_list[i], key_list[j])
                         if cost < dp[next_mask][j]:
                             dp[next_mask][j] = cost
                             path[next_mask][j] = i
@@ -78,32 +76,22 @@ def optimal_mix_order(songs):
         current_song = next_song
 
     optimal_order.reverse()
+    return optimal_order, min_cost
 
-    # Output the optimal order of songs
-    print("Optimal order of songs:")
-    for idx in optimal_order:
-        song = songs[idx]
-        print(f"Title: {song['title']}, Artist: {song['artist']}, BPM: {song['bpm']}, Key: {song['key']}")
-
+def LP_sched(bpm_list, key_list):
+    optimal_order, min_cost = optimal_mix_order(bpm_list, key_list)
     print(f"Minimum transition cost: {min_cost}")
+    return optimal_order
 
-# Example song data with keys and BPM
-songs = [
-    {'title': 'Sicko Mode', 'artist': 'Travis Scott', 'bpm': 78, 'key': '1A'},
-    {'title': 'God\'s Plan', 'artist': 'Drake', 'bpm': 77, 'key': '12A'},
-    {'title': 'HUMBLE.', 'artist': 'Kendrick Lamar', 'bpm': 75, 'key': '11A'},
-    {'title': 'Rockstar', 'artist': 'Post Malone', 'bpm': 80, 'key': '8A'},
-    {'title': 'Lucid Dreams', 'artist': 'Juice WRLD', 'bpm': 84, 'key': '9A'},
-    {'title': 'Money Trees', 'artist': 'Kendrick Lamar', 'bpm': 72, 'key': '10A'},
-    {'title': 'XO TOUR Llif3', 'artist': 'Lil Uzi Vert', 'bpm': 155, 'key': '5A'},
-    {'title': 'The Box', 'artist': 'Roddy Ricch', 'bpm': 113, 'key': '2A'},
-    {'title': 'Goosebumps', 'artist': 'Travis Scott', 'bpm': 130, 'key': '6A'},
-    {'title': 'Old Town Road', 'artist': 'Lil Nas X', 'bpm': 136, 'key': '7A'}
-]
+# # Example data
+# bpm_list = [78, 77, 75, 80, 84, 72, 155, 113, 130, 136]
+# key_list = ['1A', '12A', '11A', '8A', '9A', '10A', '5A', '2A', '6A', '7A']
 
-# For demonstration purposes, printing out the songs data
-for song in songs:
-    print(f"Title: {song['title']}, Artist: {song['artist']}, BPM: {song['bpm']}, Key: {song['key']}")
+# # Get the optimal mix order
 
+# # Output the optimal order of songs
+# print("Optimal order of songs:")
+# for idx in optimal_order:
+#     print(f"Song {idx + 1} (BPM: {bpm_list[idx]}, Key: {key_list[idx]})")
 
-optimal_mix_order(songs)
+# print(f"Minimum transition cost: {min_cost}")

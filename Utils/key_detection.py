@@ -1,37 +1,24 @@
-'''import librosa
-import numpy as np
-
-def detect_key(file_path):
-    y, sr = librosa.load(file_path)
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
-    chroma_cens = librosa.feature.chroma_cens(y=y, sr=sr)
-
-    chroma_means = np.mean(chroma, axis=1)
-    chroma_cens_means = np.mean(chroma_cens, axis=1)
-
-    # Using simple heuristics to determine the key
-    key_index = np.argmax(chroma_means)
-    keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-
-    key = keys[key_index]
-
-    return key
-
-file_path = 'Songs/20min.mp3'
-key = detect_key(file_path)
-print(f"The detected key is: {key}")'''
-
 import numpy as np
 import matplotlib.pyplot as plt
 import IPython.display as ipd
 import librosa
 import librosa.display
+import glob
+import os
+import pandas as pd
 
-# class that uses the librosa library to analyze the key that an mp3 is in
-# arguments:
-#     waveform: an mp3 file loaded by librosa, ideally separated out from any percussive sources
-#     sr: sampling rate of the mp3, which can be obtained when the file is read with librosa
-#     tstart and tend: the range in seconds of the file to be analyzed; default to the beginning and end of file if not specified
+# Define the mapping from musical keys to Camelot notation, including enharmonic equivalents
+key_to_camelot = {
+    'C': '8B', 'C#': '3B', 'Db': '3B', 'D': '10B', 'D#': '5B', 'Eb': '5B', 'E': '12B', 'F': '7B', 'F#': '2B', 'Gb': '2B', 
+    'G': '9B', 'G#': '4B', 'Ab': '4B', 'A': '11B', 'A#': '6B', 'Bb': '6B', 'B': '1B',
+    'Cm': '5A', 'C#m': '12A', 'Dbm': '12A', 'Dm': '7A', 'D#m': '2A', 'Ebm': '2A', 'Em': '9A', 'Fm': '4A', 'F#m': '11A', 
+    'Gbm': '11A', 'Gm': '6A', 'G#m': '1A', 'Abm': '1A', 'Am': '8A', 'A#m': '3A', 'Bbm': '3A', 'Bm': '10A'
+}
+
+def convert_keys_to_camelot(keys):
+    return [key_to_camelot[key] for key in keys]
+
+# Class that uses the librosa library to analyze the key that an mp3 is in
 class Tonal_Fragment(object):
     def __init__(self, waveform, sr, tstart=None, tend=None):
         self.waveform = waveform
@@ -108,9 +95,9 @@ class Tonal_Fragment(object):
     
     # prints a chromagram of the file, showing the intensity of each pitch class over time
     def chromagram(self, title=None):
-        C = librosa.feature.chroma_cqt(y=self.waveform, sr=sr, bins_per_octave=24)
+        C = librosa.feature.chroma_cqt(y=self.waveform, sr=self.sr, bins_per_octave=24)
         plt.figure(figsize=(12,4))
-        librosa.display.specshow(C, sr=sr, x_axis='time', y_axis='chroma', vmin=0, vmax=1)
+        librosa.display.specshow(C, sr=self.sr, x_axis='time', y_axis='chroma', vmin=0, vmax=1)
         if title is None:
             plt.title('Chromagram')
         else:
@@ -119,10 +106,45 @@ class Tonal_Fragment(object):
         plt.tight_layout()
         plt.show()
 
+def find_key(songs, cache_file='key_cache.csv'):
+    # Check if the cache file exists
+    if os.path.exists(cache_file):
+        # Load the cached data
+        cached_data = pd.read_csv(cache_file)
+        cached_songs = set(cached_data['Song'])
+        keys = cached_data['Key'].tolist()
+    else:
+        cached_data = pd.DataFrame(columns=['Song', 'Key'])
+        cached_songs = set()
+        keys = []
 
-audio_path = 'Songs/Lilith1.mp3'
-y, sr = librosa.load(audio_path)
-y_harmonic, y_percussive = librosa.effects.hpss(y)
+    new_songs = [song for song in songs if song not in cached_songs]
+    new_keys = []
 
-song = Tonal_Fragment(y_harmonic, sr)
-song.print_key()
+    for song in sorted(new_songs):
+        print(song)
+        y, sr = librosa.load(song)
+        y_harmonic, y_percussive = librosa.effects.hpss(y)
+
+        song_fragment = Tonal_Fragment(y_harmonic, sr)
+        detected_key = max(song_fragment.key_dict, key=song_fragment.key_dict.get)
+        new_keys.append(detected_key)
+
+    # Normalize the keys
+    new_keys = [key.replace(' minor', 'm').replace(' major', '') for key in new_keys]
+    camelot_keys = convert_keys_to_camelot(new_keys)
+
+    # Update the cached data
+    new_data = pd.DataFrame({'Song': new_songs, 'Key': camelot_keys})
+    updated_data = pd.concat([cached_data, new_data], ignore_index=True)
+
+    # Save the updated data to the cache file
+    updated_data.to_csv(cache_file, index=False)
+
+    return updated_data['Key'].tolist()
+
+if __name__ == '__main__':
+    folder_path = '../Songs/'
+    songs = glob.glob(os.path.join(folder_path, '*.mp3'))
+    camelot_keys = find_key(songs)
+    print("Camelot Keys:", camelot_keys)
